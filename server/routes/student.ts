@@ -81,6 +81,25 @@ router.post("/admin-login", async(req: Request, res: Response) => {
   }
 })
 
+router.get("/admin/student-count", async (req: Request, res: Response) => {
+  try {
+
+    const counts = await prisma.student.groupBy({
+      by: ["year"],
+      _count: {
+        year: true
+      }
+    });
+
+    res.json(counts);
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Failed to fetch counts" });
+  }
+});
+
+
 router.get("/admin/notifications", async (req: Request, res: Response) => {
   try {
     const {year} = req.query;
@@ -149,68 +168,74 @@ router.get("/:studentId/getnotifications", async (req: Request, res: Response) =
   }
 })
 
+
 router.post("/login", async (req: Request, res: Response) => {
   try {
-    const {email} = req.body;
+    const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({message: "Please enter your email properly"})
+      return res.status(400).json({ message: "Email required" });
     }
 
-    const student = await prisma.student.findFirst({
-      where: {
-          email: email
-      }
-    })
+    const student = await prisma.student.findUnique({
+      where: { email },
+    });
 
     if (!student) {
       return res.status(401).json({ message: "Account not found" });
     }
 
+    if (!student.isVerified) {
+      return res.status(401).json({
+        message: "Please verify your email first",
+      });
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = new Date(Date.now() + 5 * 60 * 1000);
 
-
     await prisma.student.update({
-      where: {email},
+      where: { email },
       data: {
         otp,
-        otpExpiry: expiry
-      }
-    })
-    
-    await sendOtpMail(email, otp)
+        otpExpiry: expiry,
+      },
+    });
 
-    res.status(200).json({message: "Please check your mail and enter the otp."})
+    await sendOtpMail(email, otp);
+
+    res.status(200).json({
+      message: "OTP sent",
+    });
   } catch (err) {
-    console.log(err);
-    res.status(401).json({message: "Error faced during login"})
+    console.error(err);
+    res.status(500).json({ message: "Login failed" });
   }
-})
+});
+
 
 router.post("/register", async (req: Request, res: Response) => {
   try {
     const { fullName, email, phone, college, year } = req.body;
 
-
     if (!fullName || !email || !phone || !college || !year) {
-      return res.status(400).json({message : "All fields are required"});
+      return res.status(400).json({ message: "All fields are required" });
     }
 
     const existingStudent = await prisma.student.findFirst({
       where: {
-        OR: [
-          {email},
-          {phone}
-        ]
-      }
-    })
+        OR: [{ email }, { phone }],
+      },
+    });
 
     if (existingStudent) {
-     return res.status(401).json({
+      return res.status(409).json({
         message: "Student already exists",
       });
     }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
 
     const student = await prisma.student.create({
       data: {
@@ -219,54 +244,67 @@ router.post("/register", async (req: Request, res: Response) => {
         phone,
         college,
         year,
+        otp,
+        otpExpiry: expiry,
       },
     });
 
-    res.status(201).json(student);
+    await sendOtpMail(email, otp);
+
+    res.status(201).json({
+      message: "Registration successful. Please verify OTP sent to email",
+      studentId: student.id,
+    });
   } catch (err) {
     console.error(err);
-    res.status(400).json({ message: "Error happened" });
+    res.status(500).json({ message: "Registration failed" });
   }
 });
 
 
-router.post("/verify-otp", async( req: Request, res: Response) => {
+
+router.post("/verify-otp", async (req: Request, res: Response) => {
   try {
-    const {email, otp} = req.body;
+    const { email, otp } = req.body;
 
     if (!email || !otp) {
-      return res.status(401).json({message: "Email and OTP required"})
+      return res.status(400).json({ message: "Email and OTP required" });
     }
 
     const student = await prisma.student.findUnique({
-      where: {email}
-    })
+      where: { email },
+    });
 
     if (!student || !student.otp || !student.otpExpiry) {
-      return res.status(401).json({message: "Invalid Otp"})
+      return res.status(401).json({ message: "Invalid OTP" });
     }
 
     if (student.otp !== otp) {
-      return res.status(401).json({message : "Otp is incorrect"})
+      return res.status(401).json({ message: "OTP incorrect" });
     }
 
     if (student.otpExpiry < new Date()) {
-      return res.status(401).json({message : "Your otp is expired please create another otp"})
+      return res.status(401).json({ message: "OTP expired" });
     }
 
-    await prisma.student.update({
-      where: {email},
+    const updatedStudent = await prisma.student.update({
+      where: { email },
       data: {
         otp: null,
-        otpExpiry: null
-      }
-    })
+        otpExpiry: null,
+        isVerified: true,
+      },
+    });
 
-    return res.status(200).json({message: "Login successfull", student})
+    res.status(200).json({
+      message: "Login successful",
+      student: updatedStudent,
+    });
   } catch (err) {
-    console.log("Error : ", err)
-    return res.status(400).json({message: "Failed to verify OTP"})
+    console.error(err);
+    res.status(500).json({ message: "OTP verification failed" });
   }
-})
+});
+
 
 export default router;

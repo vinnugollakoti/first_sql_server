@@ -23,6 +23,8 @@ model Student {
 
   otp       String?
   otpExpiry DateTime?
+  isVerified Boolean @default(false)
+  
   createdAt DateTime @default(now())
 }
 
