@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000",
-  // baseURL: "https://vexingly-hydrodynamic-jacinta.ngrok-free.dev/",
+  // baseURL: "http://localhost:3000",
+  baseURL: "https://first-sql-server-ekip.onrender.com",
   headers: {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
