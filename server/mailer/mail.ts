@@ -1,63 +1,69 @@
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-dotenv.config()
+dotenv.config();
 
+const MAIL_API =
+  "https://7feej0sxm3.execute-api.eu-north-1.amazonaws.com/default/mail_sender";
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,            // REQUIRED on Render
-  secure: false,        // MUST be false
-  auth: {
-    user: process.env.USER_MAIL,
-    pass: process.env.USER_PASSWORD, // Gmail APP PASSWORD
-  },
-  connectionTimeout: 10000,
-})
+async function sendMail(to: string, subject: string, html: string) {
+  try {
+    const response = await fetch(MAIL_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to,
+        subject,
+        html,
+        config: {
+          email: process.env.USER_MAIL,
+          pass: process.env.USER_PASSWORD,
+          from: `'EEE Team' <${process.env.USER_MAIL}>`,
+        },
+      }),
+    });
 
-transporter.verify((err: String) => {
-    if (err) {
-        console.log("Error : ", err)
-    } else {
-        console.log("SMTP READY")
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(errText);
     }
-})
 
-async function sendNotificationMail(email: String, title: String, message: String) {
-    try {
-        await transporter.sendMail({
-            from: `"EEE Team" <${process.env.USER_MAIL}>`,
-            to: email,
-            subject: "Notification from HOD",
-            html: `
-                <h2>${title}</h2>
-                <p><b>${message}</b></p>
-                <p>Thanks for using ❤️ from EEE Department.</p
-            `,
-        })
-    } catch (err) {
-        console.log("Error : ", err)
-        throw err;
-    }
+    return await response.json();
+  } catch (err) {
+    console.log("Mail Error:", err);
+    throw err;
+  }
 }
 
-async function sendOtpMail(email: String, otp: String) {
-    try {
-        await transporter.sendMail({
-            from: `"EEE Team" <${process.env.USER_MAIL}>`,
-            to: email,
-            subject: "Your OTP for EEE App Verification",
-            html: `
-                <h2>AutoForm OTP</h2>
-                <p><b>${otp}</b></p>
-                <p>Valid for 5 minutes.</p>
-                <p>Thanks for using ❤️ from EEE Department.</p
-            `,
-        })
-    } catch (err) {
-        console.log("Error : ", err)
-        throw err;
-    }
+export async function sendNotificationMail(
+  email: string,
+  title: string,
+  message: string
+) {
+  return sendMail(
+    email,
+    "Notification from HOD",
+    `
+      <h2>${title}</h2>
+      <p><b>${message}</b></p>
+      <p>Thanks for using ❤️ from EEE Department.</p>
+    `
+  );
 }
+
+export async function sendOtpMail(email: string, otp: string) {
+  return sendMail(
+    email,
+    "Your OTP for EEE App Verification",
+    `
+      <h2>AutoForm OTP</h2>
+      <p><b>${otp}</b></p>
+      <p>Valid for 5 minutes.</p>
+      <p>Thanks for using ❤️ from EEE Department.</p>
+    `
+  );
+}
+
 
 module.exports = {
   sendOtpMail,

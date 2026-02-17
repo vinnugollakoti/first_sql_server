@@ -5,6 +5,8 @@ export default {
       colors: {
         primary: "#000000",
         accent: "#451AF5",
+        "ion-blue": "#4285F4",
+        "quantum-mint": "#34A853",
       },
     },
   },
